@@ -1,0 +1,15 @@
+{
+  "name": "read-mail-service",
+  "version": "1.0.0",
+  "description": "Retrieve mails from Gmail Inbox",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Sudheer Bharadwaj G",
+  "license": "ISC",
+  "dependencies": {
+    "google-auth-library": "^1.2.1",
+    "googleapis": "^25.0.0"
+  }
+}

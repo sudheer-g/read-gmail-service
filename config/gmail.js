@@ -80,17 +80,27 @@ function readMessage(messageId, auth) {
         userId: 'me',
         id: messageId
     },  (err, result)  => {
-        //console.log(messageId + ':' + result.data);
-        console.log(result.data.payload.mimeType);
-        //const encodedMessageText = result.data.payload.body.data;
-        //const messageText = Buffer.from(encodedMessageText, 'base64');
-        //console.log(messageText.toString())
 
+        const mimeType = result.data.payload.mimeType;
+        //console.log(mimeType);
+        if(mimeType === 'text/plain') {
+            const encodedMessageText = result.data.payload.body.data;
+            const messageText = Buffer.from(encodedMessageText, 'base64');
+            console.log(messageText.toString());
+        }
+        else if(mimeType === 'multipart/alternative'){
+            const encodedMessageText = result.data.payload.parts[0].body.data;
+            const messageText = Buffer.from(encodedMessageText, 'base64');
+            console.log(messageText.toString());
+        }
+        else {
+            console.log("Unsupported MIME Format");
+        }
     });
 }
 
 module.exports.getInboxList = (auth) => {
-    const maxResults = 10;
+    const maxResults = 3;
     gmail.users.messages.list({
         auth: auth,
         userId: 'me',
@@ -111,6 +121,7 @@ module.exports.getInboxList = (auth) => {
                 const msgId = messages[i];
                 //console.log('- %s', msgId.id);
                 readMessage(msgId.id,auth);
+                console.log("\n\n");
             }
         }
     })

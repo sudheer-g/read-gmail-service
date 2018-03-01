@@ -74,24 +74,26 @@ module.exports.listLabels  = (auth) => {
     });
 };
 
+function readTextMessage(encodedMessageText) {
+    return Buffer.from(encodedMessageText, 'base64').toString();
+}
+
 function readMessage(messageId, auth) {
     gmail.users.messages.get({
         auth: auth,
         userId: 'me',
         id: messageId
     },  (err, result)  => {
-
+        //console.log(result.data.payload.headers);
         const mimeType = result.data.payload.mimeType;
         //console.log(mimeType);
         if(mimeType === 'text/plain') {
             const encodedMessageText = result.data.payload.body.data;
-            const messageText = Buffer.from(encodedMessageText, 'base64');
-            console.log(messageText.toString());
+            console.log(readTextMessage(encodedMessageText));
         }
         else if(mimeType === 'multipart/alternative'){
             const encodedMessageText = result.data.payload.parts[0].body.data;
-            const messageText = Buffer.from(encodedMessageText, 'base64');
-            console.log(messageText.toString());
+            console.log(readTextMessage(encodedMessageText));
         }
         else {
             console.log("Unsupported MIME Format");
@@ -100,7 +102,7 @@ function readMessage(messageId, auth) {
 }
 
 module.exports.getInboxList = (auth) => {
-    const maxResults = 3;
+    const maxResults = 1;
     gmail.users.messages.list({
         auth: auth,
         userId: 'me',
@@ -121,7 +123,6 @@ module.exports.getInboxList = (auth) => {
                 const msgId = messages[i];
                 //console.log('- %s', msgId.id);
                 readMessage(msgId.id,auth);
-                console.log("\n\n");
             }
         }
     })

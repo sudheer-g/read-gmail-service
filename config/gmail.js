@@ -7,6 +7,7 @@ const TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
 const TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
 const gmail = google.gmail('v1');
 const emailData = require('../emailData');
+const gmailUtils = require('./gmailUtils');
 
 // Load client secrets from a local file.
 module.exports.executeMethod = function (callback) {
@@ -20,31 +21,6 @@ module.exports.executeMethod = function (callback) {
         authorize(JSON.parse(content), callback);
     });
 };
-
-/**
- * Create an OAuth2 client with the given credentials, and then execute the
- * given callback function.
- *
- * @param {Object} credentials The authorization client credentials.
- * @param {function} callback The callback to call with the authorized client.
- */
-function authorize(credentials, callback) {
-    const clientSecret = credentials.installed.client_secret;
-    const clientId = credentials.installed.client_id;
-    const redirectUrl = credentials.installed.redirect_uris[0];
-    const auth = new googleAuth.GoogleAuth();
-    const oauth2Client = new googleAuth.OAuth2Client(clientId, clientSecret, redirectUrl);
-
-    // Check if we have previously stored a token.
-    fs.readFile(TOKEN_PATH, (err, token) => {
-        if (err) {
-            keyStore.getNewToken(oauth2Client, callback);
-        } else {
-            oauth2Client.credentials = JSON.parse(token);
-            callback(oauth2Client);
-        }
-    });
-}
 
 /**
  * Lists the labels in the user's account.
@@ -74,52 +50,6 @@ module.exports.listLabels = (auth) => {
     });
 };
 
-function base64ToText(encodedMessageText) {
-    return Buffer.from(encodedMessageText, 'base64').toString();
-}
-
-function getPlainTextFromPayload(payload) {
-    let encodedMessageText = '';
-    switch (payload.mimeType) {
-        case 'text/plain':
-            encodedMessageText = payload.body.data;
-            break;
-        case 'multipart/mixed':
-        case 'multipart/alternative':
-        case 'multipart/digest':
-        case 'multipart/related':
-            encodedMessageText = getPlainTextFromPayload(payload.parts[0]);
-            break;
-        default:
-            console.log("Unsupported MIME format: " + mimeType);
-    }
-    return encodedMessageText;
-}
-
-function readMessage(auth, messageId) {
-    gmail.users.messages.get({
-        auth: auth,
-        userId: 'me',
-        id: messageId
-    }, (err, result) => {
-        //console.log(result.data.payload.headers);
-        const encodedMessageText = getPlainTextFromPayload(result.data.payload);
-        console.log(base64ToText(encodedMessageText));
-        console.log("\n");
-    });
-}
-
-function markAsRead(auth, messageId) {
-    gmail.users.messages.modify({
-        auth: auth,
-        userId: 'me',
-        id: messageId,
-        resource: {
-            removeLabelIds: ['UNREAD']
-        }
-    });
-}
-
 module.exports.getInboxList = (auth) => {
     const maxResults = 5;
     gmail.users.messages.list({
@@ -135,7 +65,7 @@ module.exports.getInboxList = (auth) => {
         }
         const messages = response.data.messages;
         if (messages === undefined || messages.length === 0) {
-            console.log('No Messages found.');
+            console.log('No unread messages left.');
         } else {
             console.log('Messages:');
             for (let i = 0; i < messages.length; i++) {
@@ -148,21 +78,8 @@ module.exports.getInboxList = (auth) => {
     })
 };
 
-function makeBody(to, from, subject, message) {
-    const str = ["Content-Type: text/plain; charset=\"UTF-8\"\n",
-        "MIME-Version: 1.0\n",
-        "Content-Transfer-Encoding: 7bit\n",
-        "to: ", to, "\n",
-        "from: ", from, "\n",
-        "subject: ", subject, "\n\n",
-        message
-    ].join('');
-    return new Buffer(str).toString("base64").replace(/\+/g, '-').replace(/\//g, '_');
-}
-
 module.exports.writeMail = (auth) => {
-    //Replace these placeholder credentials with valid credentials.
-    const raw = makeBody(emailData.toEmail, emailData.fromEmail, 'Does it work with emailData file', 'It does!');
+    const raw = gmailUtils.makeBody(emailData.toEmail, emailData.fromEmail, 'Does it work with emailData file', 'It does!');
     gmail.users.messages.send({
         auth: auth,
         userId: 'me',
@@ -172,3 +89,52 @@ module.exports.writeMail = (auth) => {
     })
 };
 
+/**
+ * Create an OAuth2 client with the given credentials, and then execute the
+ * given callback function.
+ *
+ * @param {Object} credentials The authorization client credentials.
+ * @param {function} callback The callback to call with the authorized client.
+ */
+function authorize(credentials, callback) {
+    const clientSecret = credentials.installed.client_secret;
+    const clientId = credentials.installed.client_id;
+    const redirectUrl = credentials.installed.redirect_uris[0];
+    const auth = new googleAuth.GoogleAuth();
+    const oauth2Client = new googleAuth.OAuth2Client(clientId, clientSecret, redirectUrl);
+
+    // Check if we have previously stored a token.
+    fs.readFile(TOKEN_PATH, (err, token) => {
+        if (err) {
+            keyStore.getNewToken(oauth2Client, callback);
+        } else {
+            oauth2Client.credentials = JSON.parse(token);
+            callback(oauth2Client);
+        }
+    });
+}
+
+
+function readMessage(auth, messageId) {
+    gmail.users.messages.get({
+        auth: auth,
+        userId: 'me',
+        id: messageId
+    }, (err, result) => {
+        //console.log(result.data.payload.headers);
+        const encodedMessageText = gmailUtils.getPlainTextFromPayload(result.data.payload);
+        console.log(gmailUtils.base64ToText(encodedMessageText));
+        console.log("\n");
+    });
+}
+
+function markAsRead(auth, messageId) {
+    gmail.users.messages.modify({
+        auth: auth,
+        userId: 'me',
+        id: messageId,
+        resource: {
+            removeLabelIds: ['UNREAD']
+        }
+    });
+}

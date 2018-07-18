@@ -51,7 +51,7 @@ function authorize(credentials, callback) {
  *
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-module.exports.listLabels  = (auth) => {
+module.exports.listLabels = (auth) => {
 
     gmail.users.labels.list({
         auth: auth,
@@ -74,35 +74,54 @@ module.exports.listLabels  = (auth) => {
     });
 };
 
-function readTextMessage(encodedMessageText) {
+function base64ToText(encodedMessageText) {
     return Buffer.from(encodedMessageText, 'base64').toString();
 }
 
-function readMessage(messageId, auth) {
+function getPlainTextFromPayload(payload) {
+    let encodedMessageText = '';
+    switch (payload.mimeType) {
+        case 'text/plain':
+            encodedMessageText = payload.body.data;
+            break;
+        case 'multipart/mixed':
+        case 'multipart/alternative':
+        case 'multipart/digest':
+        case 'multipart/related':
+            encodedMessageText = getPlainTextFromPayload(payload.parts[0]);
+            break;
+        default:
+            console.log("Unsupported MIME format: " + mimeType);
+    }
+    return encodedMessageText;
+}
+
+function readMessage(auth, messageId) {
     gmail.users.messages.get({
         auth: auth,
         userId: 'me',
         id: messageId
-    },  (err, result)  => {
+    }, (err, result) => {
         //console.log(result.data.payload.headers);
-        const mimeType = result.data.payload.mimeType;
-        //console.log(mimeType);
-        if(mimeType === 'text/plain') {
-            const encodedMessageText = result.data.payload.body.data;
-            console.log(readTextMessage(encodedMessageText));
-        }
-        else if(mimeType === 'multipart/alternative'){
-            const encodedMessageText = result.data.payload.parts[0].body.data;
-            console.log(readTextMessage(encodedMessageText));
-        }
-        else {
-            console.log("Unsupported MIME Format");
+        const encodedMessageText = getPlainTextFromPayload(result.data.payload);
+        console.log(base64ToText(encodedMessageText));
+        console.log("\n");
+    });
+}
+
+function markAsRead(auth, messageId) {
+    gmail.users.messages.modify({
+        auth: auth,
+        userId: 'me',
+        id: messageId,
+        resource: {
+            removeLabelIds: ['UNREAD']
         }
     });
 }
 
 module.exports.getInboxList = (auth) => {
-    const maxResults = 1;
+    const maxResults = 5;
     gmail.users.messages.list({
         auth: auth,
         userId: 'me',
@@ -115,14 +134,15 @@ module.exports.getInboxList = (auth) => {
             return;
         }
         const messages = response.data.messages;
-        if (messages.length === 0) {
+        if (messages === undefined || messages.length === 0) {
             console.log('No Messages found.');
         } else {
             console.log('Messages:');
-            for (let i = 0; i < maxResults; i++) {
+            for (let i = 0; i < messages.length; i++) {
                 const msgId = messages[i];
                 //console.log('- %s', msgId.id);
-                readMessage(msgId.id,auth);
+                readMessage(auth, msgId.id);
+                markAsRead(auth, msgId.id);
             }
         }
     })
@@ -140,7 +160,7 @@ function makeBody(to, from, subject, message) {
     return new Buffer(str).toString("base64").replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-module.exports.writeMail  = (auth) => {
+module.exports.writeMail = (auth) => {
     //Replace these placeholder credentials with valid credentials.
     const raw = makeBody(emailData.toEmail, emailData.fromEmail, 'Does it work with emailData file', 'It does!');
     gmail.users.messages.send({
